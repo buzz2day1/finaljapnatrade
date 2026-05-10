@@ -38,31 +38,47 @@ const AdminAuth = ({ onAuthenticated }: AdminAuthProps) => {
         return;
       }
 
-      // Check if user has admin role using the has_role function
-      const { data: hasAdminRole, error: roleError } = await supabase
-        .rpc('has_role', { 
-          _user_id: authData.user.id, 
-          _role: 'admin' 
-        });
+      // Check if user has admin role
+      try {
+        const { data: hasAdminRole, error: roleError } = await supabase
+          .rpc('has_role', { 
+            _user_id: authData.user.id, 
+            _role: 'admin' 
+          });
 
-      if (roleError) {
-        console.error("Error checking role:", roleError);
-        toast.error("Failed to verify admin access");
-        await supabase.auth.signOut();
+        if (!roleError && hasAdminRole) {
+          // Successfully verified admin
+          toast.success("Welcome to Admin Panel");
+          onAuthenticated();
+          setIsLoading(false);
+          return;
+        }
+
+        if (roleError) {
+          console.warn("Role check RPC failed, trying direct DB check:", roleError);
+        }
+      } catch (rpcErr) {
+        console.warn("RPC error, falling back to direct DB check:", rpcErr);
+      }
+
+      // Fallback: Try to look up admin role directly (works if RLS allows)
+      const { data: roleData, error: roleQueryError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", authData.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      if (!roleQueryError && roleData) {
+        toast.success("Welcome to Admin Panel");
+        onAuthenticated();
         setIsLoading(false);
         return;
       }
 
-      if (!hasAdminRole) {
-        toast.error("Access denied. Admin privileges required.");
-        await supabase.auth.signOut();
-        setIsLoading(false);
-        return;
-      }
-
-      // Successfully verified admin
-      toast.success("Welcome to Admin Panel");
-      onAuthenticated();
+      // If we get here, admin check failed
+      toast.error("Access denied. Admin privileges required.");
+      await supabase.auth.signOut();
     } catch (error) {
       console.error("Admin auth error:", error);
       toast.error("Authentication failed");
