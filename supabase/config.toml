@@ -1,0 +1,21 @@
+project_id = "avixixwhgifjjnligkuw"
+
+# Legacy NOWPayments functions (can be removed after migration)
+[functions.nowpayments-webhook]
+verify_jwt = false
+
+[functions.nowpayments-payout]
+verify_jwt = false
+
+[functions.nowpayments-create-payment]
+verify_jwt = false
+
+# New Plisio functions
+[functions.plisio-create-payment]
+verify_jwt = false
+
+[functions.plisio-webhook]
+verify_jwt = false
+
+[functions.plisio-payout]
+verify_jwt = false
