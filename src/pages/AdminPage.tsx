@@ -93,6 +93,39 @@ const AdminPage = ({ onBack }: AdminPageProps) => {
 
   useEffect(() => { fetchAdminData(); }, []);
 
+  // Real-time subscription for admin page (auto-refresh on changes)
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions',
+        },
+        () => {
+          fetchAdminData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+        },
+        () => {
+          fetchAdminData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const fetchAdminData = async () => {
     try {
       setLoading(true);
