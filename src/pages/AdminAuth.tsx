@@ -19,7 +19,6 @@ const AdminAuth = ({ onAuthenticated }: AdminAuthProps) => {
     setIsLoading(true);
 
     try {
-      // First sign in with Supabase
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -38,45 +37,36 @@ const AdminAuth = ({ onAuthenticated }: AdminAuthProps) => {
         return;
       }
 
-      // Check if user has admin role
+      // Try multiple ways to verify admin access
+      let isAdmin = false;
+
+      // Method 1: Check via has_role RPC function
       try {
-        const { data: hasAdminRole, error: roleError } = await supabase
-          .rpc('has_role', { 
-            _user_id: authData.user.id, 
-            _role: 'admin' 
-          });
+        const { data: hasAdminRole } = await supabase
+          .rpc('has_role', { _user_id: authData.user.id, _role: 'admin' });
+        if (hasAdminRole) isAdmin = true;
+      } catch (_) {}
 
-        if (!roleError && hasAdminRole) {
-          // Successfully verified admin
-          toast.success("Welcome to Admin Panel");
-          onAuthenticated();
-          setIsLoading(false);
-          return;
-        }
-
-        if (roleError) {
-          console.warn("Role check RPC failed, trying direct DB check:", roleError);
-        }
-      } catch (rpcErr) {
-        console.warn("RPC error, falling back to direct DB check:", rpcErr);
+      // Method 2: Check user_roles table directly
+      if (!isAdmin) {
+        try {
+          const { data: roleData } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", authData.user.id)
+            .eq("role", "admin")
+            .maybeSingle();
+          if (roleData) isAdmin = true;
+        } catch (_) {}
       }
 
-      // Fallback: Try to look up admin role directly (works if RLS allows)
-      const { data: roleData, error: roleQueryError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", authData.user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-
-      if (!roleQueryError && roleData) {
+      if (isAdmin) {
         toast.success("Welcome to Admin Panel");
         onAuthenticated();
         setIsLoading(false);
         return;
       }
 
-      // If we get here, admin check failed
       toast.error("Access denied. Admin privileges required.");
       await supabase.auth.signOut();
     } catch (error) {
